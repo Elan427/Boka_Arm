@@ -1,0 +1,27 @@
+[project]
+name = "so101-manipulation-project"
+version = "0.1.0"
+description = "SO-101 end-to-end manipulation project template"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "torch>=2.6.0",
+  "torchvision>=0.21.0",
+  "lerobot[dataset]>=0.6.0",
+  "mujoco>=3.2.0",
+  "mink>=1.0.0",
+  "numpy>=1.26",
+  "opencv-python>=4.10.0",
+  "wandb>=0.17.0",
+]
+
+[tool.uv]
+default-groups = []
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
