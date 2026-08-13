@@ -20,8 +20,11 @@ print("Sequence: hover above cube → descend → close gripper → lift 10cm\n"
 # Initialize IK solver
 ik = SO101IK()
 
-# Get cube position
-d.qpos[:] = 0
+# Set up initial pose: arm at home, cube at scene position
+d.qpos[:6] = 0  # Arm home
+d.qpos[6:9] = [0.15, 0.15, 0.015]  # Cube xyz position
+d.qpos[9:13] = [1, 0, 0, 0]  # Cube rotation quat (identity)
+
 mujoco.mj_forward(m, d)
 cube_pos_init = d.xpos[cube_body_id].copy()
 cube_z_rest = cube_pos_init[2]

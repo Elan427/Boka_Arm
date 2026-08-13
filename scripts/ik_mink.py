@@ -97,14 +97,13 @@ class SO101IK:
         Returns:
             q_sol: 6-DOF joint angles
         """
-        # Default orientation: Z-axis points down (for top-down grasp)
+        # Default orientation: top-down grasp.
+        # The TCP's approach axis is the gripper body's local -z (the moving
+        # jaw and tcp site are both offset in -z from the gripper body
+        # origin, per so101_new_calib.xml). So to point the approach axis
+        # world-down, local +z must map to world +z: identity rotation.
         if orientation is None:
-            # TCP x-axis forward, y-axis right, z-axis down (into table)
-            R = np.array([
-                [1,  0,  0],  # x forward
-                [0, -1,  0],  # y right (flipped for table frame)
-                [0,  0, -1],  # z down
-            ])
+            R = np.eye(3)
         else:
             R = orientation
         
@@ -125,9 +124,5 @@ def se3_from_rotation_translation(R, p):
 
 
 def rotation_matrix_z_down():
-    """Rotation matrix for top-down grasp: z-axis points down."""
-    return np.array([
-        [1,  0,  0],
-        [0, -1,  0],
-        [0,  0, -1],
-    ])
+    """Rotation matrix for top-down grasp (TCP approach axis pointing down)."""
+    return np.eye(3)
