@@ -10,13 +10,15 @@
 // 1023. That is fine; do NOT call analogReference(EXTERNAL) unless AREF is wired
 // to 3.3V.
 //
-// Output, 115200 baud, ~200 lines/s:   <A0 counts>,<A1 counts>\n
+// Output, 115200 baud, 240 lines/s (= 4 samples per 60 Hz mains cycle, so a 4-sample
+// boxcar on the host cancels mains hum; use 200 Hz = 5/cycle on 50 Hz mains):   <A0>,<A1>
+
 // Each value is the mean of OVERSAMPLE conversions.
 
 const uint8_t PIN_A = A0;
 const uint8_t PIN_B = A1;
 const uint8_t OVERSAMPLE = 8;
-const unsigned long PERIOD_US = 5000;  // 200 Hz
+const unsigned long PERIOD_US = 4167;  // 240 Hz
 
 unsigned long next_us;
 

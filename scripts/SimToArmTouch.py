@@ -11,6 +11,7 @@ firmware/gripper_touch and so101lib/touch.py) and the grasp is closed-loop:
   * losing contact while lifting/carrying aborts the carry instead of "placing"
     nothing
 
+Run scripts/train_grip.py once per object to learn the grip force (config/grip_profile.json).
 Flash firmware/gripper_touch to the Arduino first. Keep the jaws open and
 untouched while the sensors tare at start-up.
 
@@ -23,7 +24,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from so101lib import hud, pickplace, pickplace_touch
+from so101lib import grip, hud, pickplace, pickplace_touch
 from so101lib.touch import TouchSensors
 
 HARDWARE_ENABLED = True
@@ -32,6 +33,8 @@ HARDWARE_ENABLED = True
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", default="COM3", help="Arduino serial port")
+    ap.add_argument("--smooth", type=float, default=0.0,
+                    help="extra sensor smoothing: weight of the newest sample (0 = off, 0.1 = heavy)")
     ap.add_argument("--once", action="store_true", help="one successful cycle, then stop")
     ap.add_argument("--no-sensors", action="store_true",
                     help="run without touch feedback (falls back to a blind close)")
@@ -39,7 +42,7 @@ def main():
 
     touch = None
     if not args.no_sensors:
-        touch = TouchSensors(args.port)
+        touch = TouchSensors(args.port, smooth=args.smooth)
         touch.start()
 
     pickplace.silence_clamp_warnings()
@@ -55,6 +58,13 @@ def main():
             print(f"touch baseline {np.round(base, 1).tolist()}  noise {np.round(noise, 1).tolist()}  "
                   f"on-threshold {np.round(touch.thresholds(), 1).tolist()} counts")
 
+        profile = grip.GripProfile.load()
+        if profile is None:
+            print("No grip profile -- using default force target. Run scripts/train_grip.py to learn one.")
+        else:
+            print(f"Grip profile '{profile.object}': hold {np.round(profile.target_level).tolist()} counts, "
+                  f"limit {np.round(profile.limit_level).tolist()} (max seen {np.round(profile.sat_level).tolist()})")
+
         with mujoco.viewer.launch_passive(ctx["m"], ctx["d"]) as viewer:
             sim.set_cube_pose(pick_xy, ctx["cube_hold_z"])
             viewer.sync()
@@ -69,7 +79,7 @@ def main():
                 sim.hold_cube(pick_xy, ctx["cube_hold_z"])
                 viewer.sync()
 
-                result = pickplace_touch.run_cycle(ctx, viewer, pick_xy, place_xy, touch)
+                result = pickplace_touch.run_cycle(ctx, viewer, pick_xy, place_xy, touch, profile)
                 if result == "closed":
                     break
                 if result == "ok":

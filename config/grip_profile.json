@@ -1,0 +1,30 @@
+{
+  "sat_level": [
+    0.0,
+    0.0
+  ],
+  "target_level": [
+    595.25,
+    492.75
+  ],
+  "limit_level": [
+    773.825,
+    640.575
+  ],
+  "sensitivity": [
+    11905.0,
+    9855.0
+  ],
+  "contact_travel": 0.6756580979812111,
+  "peak_current": 0.0,
+  "trials": 0,
+  "stops": [],
+  "object": "ball",
+  "updated": "2026-10-18T18:58:40",
+  "min_hold_travel": 0.6756580979812111,
+  "min_hold_level": [
+    595.25,
+    492.75
+  ],
+  "min_hold_attempts": 1
+}

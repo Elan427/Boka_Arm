@@ -225,7 +225,7 @@ def goto(sim, viewer, follower, ctrl, secs=2.5, label=None, on_step=None):
 
 def move_line(sim, viewer, follower, ik, calib, desired_xyz, gripper_ctrl,
               secs=3.0, warm=None, label="MOVE", stop_on_contact=False,
-              correct=True, on_step=None):
+              correct=True, on_step=None, stop_fn=None):
     """Straight-line Cartesian move of the TCP to desired_xyz (a base-frame point;
     calib.apply_target maps it to the model goal that lands the real TCP there).
     correct=False commands the model TCP to desired_xyz directly (for XY calib).
@@ -233,6 +233,8 @@ def move_line(sim, viewer, follower, ik, calib, desired_xyz, gripper_ctrl,
     The path is sampled into IK waypoints ~IK_WP_LEN apart; `_stream` then plays a
     joint-space-interpolated target across them over `secs`, force=True, so the
     arm moves like HOME does. Returns (q6, status): True / "contact" / False.
+    stop_fn: optional callable polled every sim step; when it returns True the move
+    stops early and status is "contact" (e.g. a grip monitor noticing a drop).
     """
     desired_xyz = np.asarray(desired_xyz, dtype=float)
     start = sim.tcp_pos()
@@ -257,14 +259,16 @@ def move_line(sim, viewer, follower, ik, calib, desired_xyz, gripper_ctrl,
     hud.phase(label)
     if err > 0.010:
         hud.note(f"IK short {err * 1000:.0f} mm -- best effort")
-    cstop = (lambda: _foreign_table_contact(sim)) if stop_on_contact else None
+    cstop = stop_fn if stop_fn is not None else (
+        (lambda: _foreign_table_contact(sim)) if stop_on_contact else None)
     final = np.array([*qs[-1], gripper_ctrl])
     r = _stream(sim, viewer, follower, target_fn, secs, contact_stop=cstop,
                 on_step=on_step, settle_at=final)
     if r is False:
         return final, False
     if r == "contact":
-        hud.note(f"table contact z={sim.tcp_pos()[2]:+.3f} -- stopped")
+        hud.note("stopped early" if stop_fn is not None
+                 else f"table contact z={sim.tcp_pos()[2]:+.3f} -- stopped")
         return final, "contact"
     return final, True
 

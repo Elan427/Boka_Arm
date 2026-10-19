@@ -34,9 +34,11 @@ def main():
             lv = t.levels()
             c = t.contact()
             full = max(on.max() * 4, 60)
+            rw = t.raw()
             sys.stdout.write(
-                f"\r L {bar(lv[0], full)} {lv[0]:5.0f} {'TOUCH' if c[0] else '     '}"
-                f" | R {bar(lv[1], full)} {lv[1]:5.0f} {'TOUCH' if c[1] else '     '} ")
+                f"\r raw A0 {rw[0]:5.0f} A1 {rw[1]:5.0f} | "
+                f"L {bar(lv[0], full, 20)} {lv[0]:4.0f} {'TOUCH' if c[0] else '     '}"
+                f" | R {bar(lv[1], full, 20)} {lv[1]:4.0f} {'TOUCH' if c[1] else '     '} ")
             sys.stdout.flush()
             time.sleep(0.03)
     except KeyboardInterrupt:

@@ -13,6 +13,7 @@ a free-air baseline* taken by `tare()` -- bend either way and it counts as touch
 """
 import threading
 import time
+from collections import deque
 
 import numpy as np
 
@@ -21,19 +22,27 @@ import numpy as np
 # (hysteresis), so a reading hovering at the edge does not chatter.
 TOUCH_ON_MIN = 15.0
 TOUCH_ON_SIGMAS = 6.0
-SMOOTHING = 0.3  # EMA weight of the newest sample (samples arrive at ~200 Hz)
+BOXCAR = 4  # samples averaged; the sketch runs 240 Hz = 4 per 60 Hz mains cycle,
+            # so this cancels mains hum (use 5 with 200 Hz firmware on 50 Hz mains)
 STALE_AFTER = 0.5  # s without a sample -> reading considered dead
 
 
 class TouchSensors:
-    def __init__(self, port="COM3", baud=115200):
+    def __init__(self, port="COM3", baud=115200, smooth=0.0):
+        # smooth: extra exponential smoothing on top of the mains boxcar, as the weight
+        # of the newest sample (0 or 1 = off, 0.1 = heavy). Can be changed at runtime.
+        self.smooth = smooth
+        self._ema = None
+        self._boxed = None         # boxcar-only reading, before the extra smoothing
         self.port = port
         self.baud = baud
         self._ser = None
         self._thread = None
         self._stop = threading.Event()
         self._lock = threading.Lock()
-        self._filt = None          # EMA-filtered [A0, A1] counts
+        self._filt = None          # boxcar-filtered [A0, A1] counts
+        self._hist = []
+        self.log = deque(maxlen=400_000)   # (time, A0, A1, A0 smoothed, A1 smoothed) per sample
         self._raw = None
         self._stamp = 0.0
         self._base = np.zeros(2)
@@ -85,7 +94,16 @@ class TouchSensors:
             v = np.array([a, b])
             with self._lock:
                 self._raw = v
-                self._filt = v.copy() if self._filt is None else self._filt + SMOOTHING * (v - self._filt)
+                self._hist.append(v)
+                del self._hist[:-BOXCAR]
+                self._boxed = np.mean(self._hist, axis=0)
+                a = self.smooth
+                if not (0.0 < a < 1.0) or self._ema is None:
+                    self._ema = self._boxed.copy()
+                else:
+                    self._ema = self._ema + a * (self._boxed - self._ema)
+                self._filt = self._ema.copy()
+                self.log.append((time.time(), *self._boxed, *self._ema))
                 self._stamp = time.time()
 
     # --- calibration -------------------------------------------------------
@@ -97,8 +115,8 @@ class TouchSensors:
         last = 0.0
         while time.time() < t_end:
             with self._lock:
-                if self._raw is not None and self._stamp != last:
-                    samples.append(self._raw.copy())
+                if self._filt is not None and len(self._hist) == BOXCAR and self._stamp != last:
+                    samples.append(self._filt.copy())
                     last = self._stamp
             time.sleep(0.002)
         if len(samples) < 20:
@@ -108,6 +126,47 @@ class TouchSensors:
         self._noise = np.maximum(s.std(0), 1.0)
         self._state = [False, False]
         return self._base.copy(), self._noise.copy()
+
+    def problems(self):
+        """Human-readable reasons the last tare() can't be trusted (empty = fine):
+        a pinned or intermittent pin, or noise so large that the touch threshold
+        would exceed what the ADC can even read."""
+        out = []
+        on = self.thresholds()
+        for i, name in enumerate(("A0 (left)", "A1 (right)")):
+            # A baseline of ~0 is NORMAL: these sensors are open-circuit until touched, so
+            # the divider node sits at 0 V at rest. Use response_check() to prove a
+            # sensor is actually connected.
+            if self._base[i] > 1020:
+                out.append(f"{name} is pinned at the ADC maximum -- shorted to the supply")
+            if self._noise[i] > 20:
+                out.append(f"{name} is unstable (noise {self._noise[i]:.0f} counts) -- loose or "
+                           "intermittent connection, or the sensor was being moved during the tare")
+            if on[i] > 300:
+                out.append(f"{name} touch threshold {on[i]:.0f} counts is unusably large")
+        return out
+
+    def response_check(self, timeout=10.0, say=print):
+        """Ask the user to press each sensor in turn and confirm it registers.
+        Proves a sensor is wired, since an idle reading of 0 looks the same whether the
+        sensor is connected or not. Returns (left_ok, right_ok)."""
+        ok = [False, False]
+        for i, name in enumerate(("LEFT (A0)", "RIGHT (A1)")):
+            say(f"  Press and hold the {name} sensor now ({timeout:.0f} s)...")
+            t_end = time.time() + timeout
+            while time.time() < t_end:
+                if self.levels()[i] > self.thresholds()[i]:
+                    ok[i] = True
+                    break
+                time.sleep(0.02)
+            if ok[i]:
+                say("    registered -- release it")
+                t_rel = time.time() + 4.0
+                while time.time() < t_rel and self.levels()[i] > 0.5 * self.thresholds()[i]:
+                    time.sleep(0.02)
+            else:
+                say("    NO RESPONSE")
+        return tuple(ok)
 
     def thresholds(self):
         return np.maximum(TOUCH_ON_MIN, TOUCH_ON_SIGMAS * self._noise)
@@ -125,6 +184,18 @@ class TouchSensors:
             return 0.0, 0.0
         d = np.abs(f - self._base)
         return float(d[0]), float(d[1])
+
+    def unsmoothed(self):
+        """(A0, A1) filtered by the mains boxcar only -- the trace before `smooth`."""
+        with self._lock:
+            f = None if self._boxed is None else self._boxed.copy()
+        return (0.0, 0.0) if f is None else (float(f[0]), float(f[1]))
+
+    def raw(self):
+        """(A0, A1) absolute filtered ADC counts -- for wiring checks."""
+        with self._lock:
+            f = None if self._filt is None else self._filt.copy()
+        return (0.0, 0.0) if f is None else (float(f[0]), float(f[1]))
 
     def contact(self):
         """(left, right) touch booleans, with hysteresis."""

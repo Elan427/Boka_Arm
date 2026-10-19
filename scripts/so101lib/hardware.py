@@ -140,6 +140,13 @@ class Follower:
         deg5 = np.array([pos[name] for name in ARM_JOINT_NAMES], dtype=float)
         return self.calib.deg_to_rad(deg5)
 
+    def read_gripper_current(self):
+        """Gripper motor current in raw servo units (~6.5 mA each), or None."""
+        try:
+            return float(self._robot.bus.read("Present_Current", GRIPPER_JOINT, normalize=False))
+        except Exception:
+            return None
+
     def read_raw_deg(self):
         """Raw present position dict, degrees/percent, keyed by motor name."""
         return dict(self._robot.bus.sync_read("Present_Position"))

@@ -17,7 +17,7 @@ import time
 
 import numpy as np
 
-from . import hud, motion
+from . import grip, hud, motion
 from .pickplace import GRASP_TIP_Z, HOVER_TIP_Z, LIFT_TIP_Z, dur
 
 GRIP_FORCE_TARGET = 3.0     # weaker jaw's force, in touch-threshold units
@@ -47,13 +47,28 @@ def _close_until_touch(ctx, viewer, touch, q_arm, on_step):
     return last[0], r == "contact"
 
 
-def _tighten(ctx, viewer, touch, q_arm, g, on_step):
-    """Creep the gripper closed until the weaker jaw reaches GRIP_FORCE_TARGET.
+def _tighten(ctx, viewer, touch, q_arm, g, on_step, profile=None):
+    """Squeeze to the grip force. With a learned GripProfile (train_grip.py) this is a
+    closed loop on the sensor levels in counts (target and limit from the profile);
+    without one, creep closed until the weaker jaw reaches GRIP_FORCE_TARGET.
     Returns the final gripper ctrl, or None if the viewer closed."""
     sim, follower = ctx["sim"], ctx["follower"]
     g_open, g_closed = ctx["g_open"], ctx["g_closed"]
-    step = SQUEEZE_STEP * (g_closed - g_open)
+    span = g_closed - g_open
+    step = SQUEEZE_STEP * span
     lo, hi = min(g_open, g_closed), max(g_open, g_closed)
+    if profile is not None:
+        for _ in range(SQUEEZE_MAX_STEPS * 3):
+            d = grip.squeeze_step(profile, touch.levels(), SQUEEZE_STEP)
+            if d == 0.0:
+                break
+            g = float(np.clip(g + d * span, lo, hi))
+            if not motion.set_gripper(sim, viewer, follower, q_arm, g, secs=dur(0.5),
+                                      label="  TIGHTEN (learned grip force)", on_step=on_step):
+                return None
+        lv = touch.levels()
+        hud.note(f"grip L{lv[0]:.0f}/{profile.target_level[0]:.0f} R{lv[1]:.0f}/{profile.target_level[1]:.0f}")
+        return g
     for _ in range(SQUEEZE_MAX_STEPS):
         if min(touch.force()) >= GRIP_FORCE_TARGET:
             break
@@ -86,7 +101,7 @@ class _Watch:
             hud.note("CONTACT LOST")
 
 
-def run_cycle(ctx, viewer, pick_xy, place_xy, touch):
+def run_cycle(ctx, viewer, pick_xy, place_xy, touch, profile=None):
     sim, follower, ik, calib = ctx["sim"], ctx["follower"], ctx["ik"], ctx["calib"]
     g_open, g_closed = ctx["g_open"], ctx["g_closed"]
     table_z, cube_hold_z = calib.table_z, ctx["cube_hold_z"]
@@ -117,7 +132,7 @@ def run_cycle(ctx, viewer, pick_xy, place_xy, touch):
             motion.set_gripper(sim, viewer, follower, grasp_q, g_open,
                                label="  OPEN (missed)", on_step=hold)
             return "missed"
-        g_hold = _tighten(ctx, viewer, touch, grasp_q, g, hold)
+        g_hold = _tighten(ctx, viewer, touch, grasp_q, g, hold, profile)
         if g_hold is None:
             return "closed"
     else:
