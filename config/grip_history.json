@@ -1,3 +1,22 @@
 {
- "cube__travel": []
+ "cube__travel": [
+  {
+   "phase": "up",
+   "target": 0.0,
+   "held": true,
+   "left": 171.25,
+   "right": 526.25,
+   "travel": 0.7742713675779119,
+   "contact": 0.7742713675779119
+  },
+  {
+   "phase": "confirm",
+   "target": 0.0,
+   "held": true,
+   "left": 488.0,
+   "right": 567.5,
+   "travel": 0.7742713675779119,
+   "contact": 0.7742713675779119
+  }
+ ]
 }
