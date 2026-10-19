@@ -1,13 +1,16 @@
-"""Inspect SO-ARM100 MuJoCo model contract."""
-from pathlib import Path
-import numpy as np
+"""Inspect the SO-101 MuJoCo model contract (joints, actuators, sites, cameras).
+
+Run: python scripts/inspect_model.py
+"""
 import mujoco
+import numpy as np
 
-XML = Path("assets/so101/scene_lift_cube.xml")
-m = mujoco.MjModel.from_xml_path(str(XML))
-d = mujoco.MjData(m)
-mujoco.mj_forward(m, d)
+from so101lib import paths, scene
 
+sim = scene.load()
+m, d = sim.m, sim.d
+
+print(f"model {paths.SCENE_XML.name}")
 print(f"timestep {m.opt.timestep}  nq {m.nq}  nu {m.nu}  nbody {m.nbody}\n")
 
 print("JOINTS")
@@ -34,7 +37,6 @@ print("\nCAMERAS")
 for i in range(m.ncam):
     print(f"  {mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_CAMERA, i)}")
 
-# Detailed diagnostics
 TRN = {0: "JOINT", 1: "JOINTINPARENT", 2: "SLIDERCRANK", 3: "TENDON", 4: "SITE", 5: "BODY"}
 GAIN = {0: "FIXED", 1: "AFFINE", 2: "MUSCLE", 3: "USER"}
 BIAS = {0: "NONE", 1: "AFFINE", 2: "MUSCLE", 3: "USER"}

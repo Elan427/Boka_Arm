@@ -1,0 +1,30 @@
+{
+  "table_z": 0.04646762938793673,
+  "tcp_xy_bias": [
+    0.0,
+    0.0
+  ],
+  "xy_rot_deg": 0.0,
+  "cube_xy": [
+    0.15,
+    0.15
+  ],
+  "joint_sign": [
+    -1,
+    1,
+    1,
+    1,
+    -1
+  ],
+  "joint_offset_deg": [
+    2.32967032967033,
+    -1.2747252747252746,
+    4.0,
+    8.483516483516484,
+    -77.05494505494505
+  ],
+  "gripper_open_pct": 100.0,
+  "gripper_closed_pct": 0.0,
+  "updated": "2026-09-05T12:16:38",
+  "notes": "pitch signs + table_z from solve_joint_calib (8 touches)"
+}

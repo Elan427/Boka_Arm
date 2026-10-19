@@ -1,28 +1,27 @@
-"""Preview camera renders to verify framing."""
+"""Render each scene camera to a PNG to verify framing.
+
+Run: python scripts/preview_cameras.py
+"""
 import mujoco
 from PIL import Image
-from pathlib import Path
 
-# Ensure output directory exists
-Path("out").mkdir(exist_ok=True)
+from so101lib import paths, scene
 
-m = mujoco.MjModel.from_xml_path("assets/so101/scene_lift_cube.xml")
-d = mujoco.MjData(m)
-mujoco.mj_forward(m, d)
+paths.OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-print(f"Model loaded: {m.ncam} cameras")
-print("Camera positions:")
-for i in range(m.ncam):
-    name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_CAMERA, i)
-    print(f"  {name}: pos={d.cam_xpos[i]}, mat={d.cam_xmat[i][:3]}")
+sim = scene.load()
+m, d = sim.m, sim.d
 
+cams = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_CAMERA, i) for i in range(m.ncam)]
+print(f"{m.ncam} cameras: {cams}")
+
+# One renderer, reused across cameras (per-render renderers leak GL context).
 with mujoco.Renderer(m, 480, 640) as r:
-    for cam in ["top", "wrist"]:
+    for cam in cams:
         r.update_scene(d, camera=cam)
-        img = Image.fromarray(r.render())
-        img.save(f"out/preview_{cam}.png")
-        print(f"{cam:8s} -> out/preview_{cam}.png")
+        out = paths.OUT_DIR / f"preview_{cam}.png"
+        Image.fromarray(r.render()).save(out)
+        print(f"  {cam:8s} -> {out}")
 
-print("\nInspect out/preview_top.png and out/preview_wrist.png")
-print("Wrist view should show jaws and space in front")
-print("Top view should show full workspace with cube in frame")
+print("\nwrist view should show the jaws and open space in front;")
+print("top view should show the full workspace with the cube in frame.")
